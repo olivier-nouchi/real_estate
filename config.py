@@ -14,4 +14,4 @@ properties_info_filename = 'properties_info.json'
 properties_ids_filepath = os.path.join(DATA_DIR, properties_ids_filename)
 properties_info_filepath = os.path.join(DATA_DIR, properties_info_filename)
 
-#print(bool(os.stat(properties_ids_filepath).st_size))
+#logger.info(bool(os.stat(properties_ids_filepath).st_size))

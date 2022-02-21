@@ -5,12 +5,14 @@ import atexit
 from collections import defaultdict
 
 import config
-from tools import logger
+import logging
 
 global properties_info
 global num_properties_with_data
 
 NUM_SECONDS_IN_DAYS = 60 * 60 * 24
+
+logger = logging.getLogger(f"{__name__}")
 
 
 def load_properties_info() -> dict:
@@ -24,7 +26,7 @@ def load_properties_info() -> dict:
             properties_info = json.load(file)
 
     except FileNotFoundError as fnfe:
-        print(f'The properties info file was not found {fnfe}.')
+        logger.info(f'The properties info file was not found {fnfe}.')
 
     return properties_info
 
@@ -41,7 +43,7 @@ def load_properties_ids() -> list:
             properties_ids = list(properties_info.keys())
 
     except FileNotFoundError as fnfe:
-        print(f'The properties ids file was not found {fnfe}.')
+        logger.info(f'The properties ids file was not found {fnfe}.')
 
     return properties_ids
 
@@ -56,7 +58,7 @@ def save_properties_info() -> None:
         with open(config.properties_info_filepath, 'w') as file:
             json.dump(properties_info, file)
     else:
-        print(f'properties info object is either empty or does not exist')
+        logger.info(f'properties info object is either empty or does not exist')
 
 
 def time_from_last_modif_file(filepath: str) -> time:
@@ -112,4 +114,4 @@ properties_info = load_properties_info()
 num_properties = count_properties(properties=properties_info)
 num_properties_with_data = count_properties_with_info(properties=properties_info)
 atexit.register(exit_handler)
-print("number properties with data", num_properties_with_data)
+logger.info("number properties with data", num_properties_with_data)

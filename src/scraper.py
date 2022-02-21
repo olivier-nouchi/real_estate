@@ -1,13 +1,17 @@
+import logging
+
 import requests
 import json
 
 import config
 import utils
-from tools import logger
 
 from utils import properties_info
 from utils import num_properties_with_data
 from utils import num_properties
+
+logger = logging.getLogger(f"{__name__}")
+logging.basicConfig(level=logging.INFO)
 
 # add property id: example: https://phoenix.onmap.co.il/v1/properties/BJOWzFv5K
 
@@ -23,6 +27,8 @@ class Scraper:
 
     num_properties_with_data = num_properties_with_data
     properties_info = properties_info
+
+    session = requests.Session()
 
     @classmethod
     def scrape_properties_ids(cls, buy_or_rent_option: str) -> list:
@@ -44,17 +50,18 @@ class Scraper:
         cls.params['$skip'] = '0'
         cls.params['option'] = buy_or_rent_option
 
-        while newly_scraped_properties:
-            response = requests.get(url=cls.onmap_endpoint, params=cls.params)
-            data = response.json()['data']
+        with cls.session as session:
+            while newly_scraped_properties:
+                response = session.get(url=cls.onmap_endpoint, params=cls.params)
+                data = response.json()['data']
 
-            newly_scraped_properties = [property.get('id') for property in data]
-            scraped_properties_ids_list.extend(newly_scraped_properties)
-            # To scrape the properties that follow
-            cls.params['$skip'] = str(int(cls.params['$skip']) + 300)
+                newly_scraped_properties = [property.get('id') for property in data]
+                scraped_properties_ids_list.extend(newly_scraped_properties)
+                # To scrape the properties that follow
+                cls.params['$skip'] = str(int(cls.params['$skip']) + 300)
 
         cls.register_properties_ids(scraped_properties_ids_list)
-        print(f'Finished scraping properties ids with option {buy_or_rent_option}')
+        logger.info(f'Finished scraping properties ids with option {buy_or_rent_option}')
 
         return scraped_properties_ids_list
 
@@ -117,38 +124,45 @@ class Scraper:
         :return:
         """
 
-        for property_id in list_properties_ids:
-            try:
-                property_info_url = cls.property_info_endpoint + '/' + property_id
-                response = requests.get(url=property_info_url)
+        with cls.session as session:
+            for property_id in list_properties_ids:
+                try:
+                    property_info_url = cls.property_info_endpoint + '/' + property_id
+                    response = session.get(url=property_info_url)
 
-                data = response.json()
+                    data = response.json()
 
-                if data:
-                    scraping_date = config.TODAY_DATE
-                    properties_info[property_id] = {'data': data, 'scraping_date': scraping_date}
-                    cls.num_properties_with_data += 1
-            except requests.exceptions.RequestException as re:
-                print(re)
+                    if data:
+                        scraping_date = config.TODAY_DATE
+                        properties_info[property_id] = {'data': data, 'scraping_date': scraping_date}
+                        cls.num_properties_with_data += 1
+                except requests.exceptions.RequestException as re:
+                    logger.info(re)
 
-            # Save properties info regularly
-            if cls.num_properties_with_data % 50 == 0:
-                print(f'Saving scraped properties info...')
-                print(cls.num_properties_with_data)
-                print(len(list_properties_ids))
-                print(f'Progress: {round(100*cls.num_properties_with_data/len(num_properties))}%')
-                utils.save_properties_info()
+                # Save properties info regularly
+                if cls.num_properties_with_data % 50 == 0:
+                    logger.info(f'Saving scraped properties info...')
+                    logger.info(f"{cls.num_properties_with_data}")
+                    logger.info(len(list_properties_ids))
+                    logger.info(f'Progress: {round(100*cls.num_properties_with_data/num_properties)}%')
+                    utils.save_properties_info()
 
 
-
-def main():
-    # if utils.time_from_last_modif_file(config.properties_ids_filepath) > 1:
-    scraped_properties_ids = Scraper.scrape_properties_ids(buy_or_rent_option='both')
+def scrape_properties_from_onmap(buy_or_rent_option: str = 'both') -> None:
+    """
+    :param:
+    :return:
+    """
+    scraped_properties_ids = Scraper.scrape_properties_ids(buy_or_rent_option=buy_or_rent_option)
     without_data_properties_ids = Scraper.get_properties_ids_without_data(properties_info=properties_info)
     properties_ids_with_data = Scraper.get_properties_ids_with_data(properties_info=properties_info)
     properties_ids_to_scrape = list(set(scraped_properties_ids).union(set(without_data_properties_ids)) - set(properties_ids_with_data))
-    print("number properties ids to scrape", len(properties_ids_to_scrape))
+    logger.info(f"number properties ids to scrape {len(properties_ids_to_scrape)}")
     Scraper.scrape_and_register_properties_info(list_properties_ids=properties_ids_to_scrape)
+
+
+def main():
+    scrape_properties_from_onmap(buy_or_rent_option='both')
 
 
 if __name__ == '__main__':

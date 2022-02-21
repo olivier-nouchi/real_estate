@@ -1,5 +1,7 @@
+import logging
 from utils import load_properties_info
 
+logger = logging.getLogger(f"{__name__}")
 
 class Property:
     id: str
@@ -35,8 +37,8 @@ class Property:
 def main():
     n_unique_properties = Property().count_unique_properties(properties=load_properties_info())
     n_properties = Property().count_properties(properties=load_properties_info())
-    print(n_unique_properties)
-    print(n_properties)
+    logger.info(n_unique_properties)
+    logger.info(n_properties)
 
 
 if __name__ == '__main__':

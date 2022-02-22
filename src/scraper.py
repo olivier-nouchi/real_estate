@@ -1,17 +1,14 @@
 import logging
-
 import requests
-import json
+import atexit
+
+logger = logging.getLogger(f"scraper.{__name__}")
+logging.basicConfig(level=logging.INFO)
+logging.getLogger('suds').setLevel(logging.INFO)
 
 import config
 import utils
-
-from utils import properties_info
-from utils import num_properties_with_data
-from utils import num_properties
-
-logger = logging.getLogger(f"{__name__}")
-logging.basicConfig(level=logging.INFO)
+from properties import properties_info, num_properties_with_data, num_properties, Property
 
 # add property id: example: https://phoenix.onmap.co.il/v1/properties/BJOWzFv5K
 
@@ -117,9 +114,11 @@ class Scraper:
         return list(all_properties_ids)
 
     @classmethod
-    def scrape_and_register_properties_info(cls, list_properties_ids: list) -> None:
+    def scrape_and_register_properties_info(cls, list_properties_ids: list,
+                                            buy_or_rent_option: str) -> None:
         """
 
+        :param buy_or_rent_option:
         :param list_properties_ids:
         :return:
         """
@@ -134,7 +133,9 @@ class Scraper:
 
                     if data:
                         scraping_date = config.TODAY_DATE
-                        properties_info[property_id] = {'data': data, 'scraping_date': scraping_date}
+                        properties_info[property_id] = {'data': data,
+                                                        'scraping_date': scraping_date,}
+                                                        # 'buy_or_rent_option': buy_or_rent_option}
                         cls.num_properties_with_data += 1
                 except requests.exceptions.RequestException as re:
                     logger.info(re)
@@ -143,9 +144,8 @@ class Scraper:
                 if cls.num_properties_with_data % 50 == 0:
                     logger.info(f'Saving scraped properties info...')
                     logger.info(f"{cls.num_properties_with_data}")
-                    logger.info(len(list_properties_ids))
                     logger.info(f'Progress: {round(100*cls.num_properties_with_data/num_properties)}%')
-                    utils.save_properties_info()
+                    Property.save_properties_info(properties_info)
 
 
 def scrape_properties_from_onmap(buy_or_rent_option: str = 'both') -> None:
@@ -153,16 +153,23 @@ def scrape_properties_from_onmap(buy_or_rent_option: str = 'both') -> None:
     :param:
     :return:
     """
+    # TODO: scrape the properties only if data older than 1 week OR force_scraping flag is True
     scraped_properties_ids = Scraper.scrape_properties_ids(buy_or_rent_option=buy_or_rent_option)
     without_data_properties_ids = Scraper.get_properties_ids_without_data(properties_info=properties_info)
     properties_ids_with_data = Scraper.get_properties_ids_with_data(properties_info=properties_info)
     properties_ids_to_scrape = list(set(scraped_properties_ids).union(set(without_data_properties_ids)) - set(properties_ids_with_data))
     logger.info(f"number properties ids to scrape {len(properties_ids_to_scrape)}")
-    Scraper.scrape_and_register_properties_info(list_properties_ids=properties_ids_to_scrape)
+    Scraper.scrape_and_register_properties_info(list_properties_ids=properties_ids_to_scrape,
+                                                buy_or_rent_option=buy_or_rent_option)
+
+
+def exit_handler():
+    Property().save_properties_info(properties_info=properties_info)
 
 
 def main():
     scrape_properties_from_onmap(buy_or_rent_option='both')
+    atexit.register(exit_handler)
 
 
 if __name__ == '__main__':
